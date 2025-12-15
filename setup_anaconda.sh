@@ -10,7 +10,7 @@ NC='\033[0m' # 重置颜色
 
 # 进度变量
 CURRENT_STEP=0
-TOTAL_STEPS=6  # 增加步骤数，因为可能有SSL验证相关操作
+TOTAL_STEPS=8  # 包含 conda 环境创建步骤
 
 # 打印进度消息的函数
 print_progress() {
@@ -21,20 +21,20 @@ print_progress() {
 
 # 获取当前用户名
 USERNAME=$(whoami)
-INSTALL_PATH="/data1/$USERNAME"
+INSTALL_PATH="/home/$USERNAME"
 
 # 创建安装目录和临时目录（如果不存在）
 print_progress "创建安装目录..."
 mkdir -p $INSTALL_PATH
 
 # 检查Anaconda安装文件是否已经存在
-ANACONDA_INSTALLER="$INSTALL_PATH/anaconda.sh"
+ANACONDA_INSTALLER="$INSTALL_PATH/miniconda3.sh"
 if [ -f "$ANACONDA_INSTALLER" ]; then
     print_progress "检测到Anaconda安装文件已存在，跳过下载步骤..."
 else
     # 下载最新版本的Anaconda（Linux 64位）
     print_progress "正在尝试下载Anaconda安装程序..."
-    wget https://repo.anaconda.com/archive/Anaconda3-2024.06-1-Linux-x86_64.sh -O $ANACONDA_INSTALLER
+    wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O $ANACONDA_INSTALLER
     
     # 检查下载是否成功，如果失败则提供选项使用不安全下载
     if [ $? -ne 0 ]; then
@@ -45,7 +45,7 @@ else
         if [[ "$ssl_response" =~ ^([yY][eE][sS]|[yY])$ ]]; then
             echo -e "${RED}警告：使用不安全连接下载可能会带来安全风险！${NC}"
             print_progress "正在使用不安全方式下载Anaconda安装程序..."
-            wget --no-check-certificate https://repo.anaconda.com/archive/Anaconda3-2024.06-1-Linux-x86_64.sh -O $ANACONDA_INSTALLER
+            wget --no-check-certificate https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O $ANACONDA_INSTALLER
             
             if [ $? -ne 0 ]; then
                 echo -e "${RED}即使使用不安全方式，下载Anaconda安装程序仍然失败，请检查网络连接。${NC}"
@@ -65,8 +65,8 @@ print_progress "给予安装脚本执行权限..."
 chmod +x $ANACONDA_INSTALLER
 
 # 执行安装（使用-b进行批处理安装，-p指定安装路径）
-print_progress "正在安装Anaconda到 $INSTALL_PATH/anaconda3 ..."
-bash $ANACONDA_INSTALLER -b -p $INSTALL_PATH/anaconda3
+print_progress "正在安装Anaconda到 $INSTALL_PATH/miniconda3 ..."
+bash $ANACONDA_INSTALLER -b -p $INSTALL_PATH/miniconda3
 
 # 验证安装是否成功
 if [ $? -ne 0 ]; then
@@ -76,7 +76,7 @@ fi
 
 # 配置环境变量
 print_progress "配置环境变量..."
-echo "export PATH=$INSTALL_PATH/anaconda3/bin:\$PATH" >> ~/.bashrc
+echo "export PATH=$INSTALL_PATH/miniconda3/bin:\$PATH" >> ~/.bashrc
 
 # 清理临时文件
 print_progress "清理临时文件..."
@@ -84,9 +84,25 @@ rm $ANACONDA_INSTALLER
 
 # 初始化conda
 print_progress "初始化conda..."
-$INSTALL_PATH/anaconda3/bin/conda init bash
+$INSTALL_PATH/miniconda3/bin/conda init bash
 
-echo -e "\n${GREEN}${BOLD}Anaconda安装完成!${NC}\n"
+# 创建 libc_env 环境
+print_progress "创建 conda 环境 libc_env..."
+# 先 source conda 以便可以使用 conda 命令
+source $INSTALL_PATH/miniconda3/etc/profile.d/conda.sh
+
+# 检查环境是否已存在
+if $INSTALL_PATH/miniconda3/bin/conda env list | grep -q "libc_env"; then
+    echo -e "${YELLOW}环境 libc_env 已存在，跳过创建。${NC}"
+else
+    $INSTALL_PATH/miniconda3/bin/conda create -n libc_env -y
+fi
+
+# 安装必要的包
+print_progress "在 libc_env 环境中安装 sysroot_linux-64 和 patchelf..."
+$INSTALL_PATH/miniconda3/bin/conda install -n libc_env sysroot_linux-64=2.28 patchelf -c conda-forge -y
+
+echo -e "\n${GREEN}${BOLD}Anaconda 和 libc_env 环境安装完成!${NC}\n"
 echo -e "要激活Anaconda环境，您需要开始新的bash会话。"
 echo -n -e "是否立即执行新的bash会话? (y/n): "
 read -r response

@@ -1,73 +1,106 @@
-# 脚本工具集
+# VSCode Remote SSH 旧版 Linux 系统兼容工具
 
-本仓库包含了一系列用于环境配置的脚本，可帮助您快速设置开发环境。
+本仓库提供了一套脚本工具，用于解决在旧版 Linux 系统（glibc < 2.28）上使用 VSCode Remote SSH 的兼容性问题。
 
-## setup_anaconda.sh
+## 快速开始
 
-### 功能介绍
-这个脚本用于在Linux环境中自动安装Anaconda3，特别适用于怀柔节点服务器。脚本会：
-- 自动下载最新版本的Anaconda（Linux 64位）
-- 在/data1/username目录下安装Anaconda3
-- 配置必要的环境变量
-- 初始化conda环境
-- 提供选项处理SSL证书验证问题
+### 一键安装（推荐）
 
-### 使用方法
-登录到怀柔节点，然后直接执行仓库根目录下的setup_anaconda.sh
+使用 `setup_all.sh` 一键完成所有配置：
+
 ```bash
-wget --no-check-certificate -O - https://raw.githubusercontent.com/ziwenhahaha/scripts/refs/heads/master/setup_anaconda.sh | bash
+bash setup_all.sh
 ```
 
-## setup_ollama.sh
+该脚本会自动完成以下操作：
+1. 检测并安装 Miniconda3（如果未安装）
+2. 创建 libc_env 环境并安装必要的依赖（sysroot_linux-64=2.28、patchelf）
+3. 自动为 VSCode Server 应用补丁
 
-### 功能介绍
-这个脚本用于设置和配置Ollama（大型语言模型运行环境）。脚本会：
-- 下载Ollama的Linux x64版本
-- 解压并安装到/data1/username/ollama目录
-- 配置必要的环境变量（OLLAMA_HOST, OLLAMA_MODELS等）
-- 使用tmux创建一个后台会话并启动Ollama服务器
-- 设置Ollama运行环境，使其准备好运行模型（如qwen:0.5b）
+---
 
-### 使用方法
-直接执行仓库根目录下的setup_ollama.sh
+## 分步安装
+
+如果您需要单独执行某个步骤，可以使用以下脚本：
+
+### 1. setup_anaconda.sh
+
+#### 功能介绍
+- 自动下载并安装 Miniconda3
+- 在用户主目录下安装（`~/miniconda3`）
+- 创建专用的 `libc_env` conda 环境
+- 安装 `sysroot_linux-64=2.28` 和 `patchelf` 工具
+- 自动配置环境变量
+
+#### 使用方法
 ```bash
-wget --no-check-certificate -O - https://raw.githubusercontent.com/ziwenhahaha/scripts/refs/heads/master/setup_ollama.sh | bash
+bash setup_anaconda.sh
 ```
 
-## setup_vscode_patch.sh
+---
 
-### 功能介绍
-这个脚本解决了在某些旧Linux系统上运行VS Code远程开发时的glibc版本兼容性问题。脚本会：
-- 创建必要的跳过服务器要求检查的文件
-- 安装bison（通过conda）
-- 下载和编译glibc 2.28
-- 创建一个自动修补VS Code服务器二进制文件的脚本，让它使用自定义的glibc库
-- 设置SSH会话，在每次连接时自动应用补丁
-- 避免VS Code远程连接时因glibc版本不匹配而出现的错误
+### 2. setup_vscode_patch.sh
 
-### 使用方法
-1、先使用setup_anaconda.sh脚本去安装一个anaconda，跟着提示去运行，它会自动地在/data1/username目录下安装一个anaconda。如果已经安装anaconda了的话，跳过这一步骤。
-```bash 
-看本文档的setup_anaconda.sh
+#### 功能介绍
+- 使用 conda 环境中的 glibc 2.28 库文件
+- 使用 patchelf 修改 VSCode Server 的 node 二进制文件
+- 将 node 的动态链接器指向 conda 环境中的新版 glibc
+- 立即执行一次补丁脚本，修复已安装的 VSCode Server
+- 生成补丁脚本供后续使用（`~/.ssh/patch_all_code_servers.sh`）
+
+#### 使用方法
+```bash
+bash setup_vscode_patch.sh
 ```
 
-2、执行setup_vscode_patch.sh脚本
-```bash 
-wget --no-check-certificate -O - https://raw.githubusercontent.com/ziwenhahaha/scripts/refs/heads/master/setup_vscode_patch.sh | bash
+#### 重新应用补丁
+如果后续 VSCode Server 更新，可以手动重新应用补丁：
+```bash
+bash ~/.ssh/patch_all_code_servers.sh
 ```
-安装完毕后，打补丁脚本不会自动触发，需要通过连接ssh的时候来触发这个打补丁。所以第四步需要重启vscode两次。
 
-检测打补丁成功，可以使用：`ldd ~/.code-server/bin/${commit-id}/node`  指令来查看，commit-id需要自己去查看，不能直接复制粘贴本命令。
+---
 
-若如下方显示，则为打补丁成功，（因为现在尚未触发，所以会提示2.27版本不匹配的问题）：
-![](./images/ldd_node.jpg)
+## VSCode 客户端配置
 
-3、客户端需要设置一个东西：在设置里面把remote.ssh.use exec server 的勾去掉：
+在本地 VSCode 中需要修改设置：
+
+**取消勾选 `remote.ssh.useExecServer`**
+
+设置路径：Settings → 搜索 "remote.ssh.use exec server" → 取消勾选
+
 ![](./images/local_vscode_setting.png)
 
-4、重启vscode两次，第一次是为了打补丁，第二次是正常进入
+---
 
-5、若不行，请把ssh extension更新到最新版
+## 验证补丁是否成功
 
-### 注意事项
-- setup_vscode_patch.sh依赖于先安装anaconda
+使用以下命令检查 node 的动态链接：
+
+```bash
+ldd ~/.vscode-server/bin/<commit-id>/node
+```
+
+> 注意：将 `<commit-id>` 替换为实际的 VSCode Server 版本号
+
+如果看到 glibc 路径指向 `~/miniconda3/envs/libc_env/...`，则说明补丁应用成功。
+
+![](./images/ldd_node.jpg)
+
+---
+
+## 注意事项
+
+- 脚本会自动处理 SSL 证书验证问题（如果遇到）
+- 如果 VSCode 连接仍有问题，尝试更新 Remote-SSH 扩展到最新版本
+- 补丁脚本会保存在 `~/.ssh/patch_all_code_servers.sh`，可随时手动执行
+
+---
+
+## 脚本说明
+
+| 脚本名称 | 功能 | 是否必需 |
+|---------|------|---------|
+| `setup_all.sh` | 一键完成所有配置 | 推荐使用 |
+| `setup_anaconda.sh` | 安装 Miniconda 和配置环境 | 必需（可单独执行） |
+| `setup_vscode_patch.sh` | 应用 VSCode Server 补丁 | 必需（可单独执行） |
