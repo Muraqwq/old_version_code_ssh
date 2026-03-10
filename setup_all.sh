@@ -20,7 +20,7 @@ if [ "$EUID" -eq 0 ]; then
 fi
 
 # 第一步：检查并安装 Anaconda/Miniconda
-echo -e "${BLUE}${BOLD}步骤 1/2: 安装 Miniconda 并配置环境${NC}"
+echo -e "${BLUE}${BOLD}步骤 1/3: 安装 Miniconda 并配置环境${NC}"
 echo "============================================"
 
 # 检查 miniconda3 是否已安装
@@ -57,7 +57,7 @@ fi
 echo ""
 
 # 第二步：配置 VSCode Server 补丁
-echo -e "${BLUE}${BOLD}步骤 2/2: 配置 VSCode Server 补丁${NC}"
+echo -e "${BLUE}${BOLD}步骤 2/3: 配置 VSCode Server 补丁${NC}"
 echo "============================================"
 
 # 确保 conda 环境已初始化
@@ -72,6 +72,27 @@ if [ -f "$SCRIPT_DIR/setup_vscode_patch.sh" ]; then
     bash "$SCRIPT_DIR/setup_vscode_patch.sh"
 else
     echo -e "${RED}错误: 找不到 setup_vscode_patch.sh 脚本${NC}"
+    exit 1
+fi
+
+echo ""
+
+# 第三步：配置 antigravity Server 补丁
+echo -e "${BLUE}${BOLD}步骤 3/3: 配置 antigravity Server 补丁${NC}"
+echo "============================================"
+
+# 确保 conda 环境已初始化
+if [ -f "$HOME/miniconda3/etc/profile.d/conda.sh" ]; then
+    source "$HOME/miniconda3/etc/profile.d/conda.sh"
+fi
+
+# 激活 libc_env 环境以使用其中的 patchelf
+conda activate libc_env 2>/dev/null || true
+
+if [ -f "$SCRIPT_DIR/setup_antigravity_patch.sh" ]; then
+    bash "$SCRIPT_DIR/setup_antigravity_patch.sh"
+else
+    echo -e "${RED}错误: 找不到 setup_antigravity_patch.sh 脚本${NC}"
     exit 1
 fi
 
